@@ -2392,7 +2392,7 @@ The current type of b is: 9
           return 0;
         }
         '''
-      # Bloated memory; same layout as C/C++
+# Bloated memory; same layout as C/C++
       self.do_run(src, '*16,0,4,8,8,12|20,0,4,4,8,12,12,16|24,0,20,0,4,4,8,12,12,16*\n*0,0,0,1,2,64,68,69,72*\n*2*')
 
   @unittest.skip('BUILD_AS_SHARED_LIB=2 is deprecated')
@@ -2429,14 +2429,11 @@ The current type of b is: 9
     self.set_setting('MAIN_MODULE', 1)
     self.set_setting('SIDE_MODULE', 0)
 
-  dlfcn_post_build = '''
-def process(filename):
-  src = open(filename, 'r').read().replace(
-    '// {{PRE_RUN_ADDITIONS}}',
-    "FS.createDataFile('/', 'liblib.so', " + str(list(bytearray(open('liblib.so', 'rb').read()))) + ", true, false, false);"
-  )
-  open(filename, 'w').write(src)
-'''
+    with open('lib_so_pre.js', 'w') as f:
+      f.write('''
+    Module.preRun = function() { FS.createDataFile('/', 'liblib.so', %s, true, false, false); }
+''' % str(list(bytearray(open('liblib.so', 'rb').read()))))
+    self.emcc_args += ['--pre-js', 'lib_so_pre.js']
 
   def build_dlfcn_lib(self, lib_src, dirname, filename):
     if self.get_setting('WASM'):
@@ -2485,8 +2482,7 @@ def process(filename):
         return 0;
       }
       '''
-    self.do_run(src, 'Constructing main object.\nConstructing lib object.\n',
-                js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'Constructing main object.\nConstructing lib object.\n')
 
   @needs_dlfcn
   def test_dlfcn_i64(self):
@@ -2530,7 +2526,7 @@ def process(filename):
         return 0;
       }
       '''
-    self.do_run(src, '|65830|', js_transform=self.dlfcn_post_build)
+    self.do_run(src, '|65830|')
 
   @no_wasm # TODO: EM_ASM in shared wasm modules, stored inside the wasm somehow
   @needs_dlfcn
@@ -2566,8 +2562,7 @@ def process(filename):
         return 0;
       }
       '''
-    self.do_run(src, 'Constructing main object.\nConstructing lib object.\nAll done.\n',
-                js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'Constructing main object.\nConstructing lib object.\nAll done.\n')
 
   @needs_dlfcn
   def test_dlfcn_qsort(self):
@@ -2644,8 +2639,7 @@ def process(filename):
       }
       '''
     self.do_run(src, 'Sort with main comparison: 5 4 3 2 1 *Sort with lib comparison: 1 2 3 4 5 *',
-                output_nicerizer=lambda x, err: x.replace('\n', '*'),
-                js_transform=self.dlfcn_post_build)
+                output_nicerizer=lambda x, err: x.replace('\n', '*'))
 
     if self.get_setting('ASM_JS') and SPIDERMONKEY_ENGINE and os.path.exists(SPIDERMONKEY_ENGINE[0]) and not self.is_wasm():
       out = run_js('liblib.so', engine=SPIDERMONKEY_ENGINE, full_output=True, stderr=STDOUT)
@@ -2746,8 +2740,7 @@ def process(filename):
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main'])
     self.do_run(src, 'In func: 13*First calling main_fptr from lib.*Second calling lib_fptr from main.*parent_func called from child*parent_func called from child*Var: 42*',
-                 output_nicerizer=lambda x, err: x.replace('\n', '*'),
-                 js_transform=self.dlfcn_post_build)
+                 output_nicerizer=lambda x, err: x.replace('\n', '*'))
 
   @needs_dlfcn
   def test_dlfcn_varargs(self):
@@ -2797,8 +2790,7 @@ def process(filename):
       }
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main'])
-    self.do_run(src, '100\n200\n13\n42\n',
-                js_transform=self.dlfcn_post_build)
+    self.do_run(src, '100\n200\n13\n42\n')
 
   @needs_dlfcn
   def test_dlfcn_alignment_and_zeroing(self):
@@ -2877,8 +2869,7 @@ def process(filename):
         return 0;
       }
       '''
-    self.do_run(src, 'success.\n',
-                js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'success.\n')
 
   @no_wasm # TODO: this needs to add JS functions to a wasm Table, need to figure that out
   @needs_dlfcn
@@ -2942,7 +2933,7 @@ def process(filename):
       }
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main', '_malloc'])
-    self.do_run(src, 'success', force_c=True, js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'success', force_c=True)
 
   @needs_dlfcn
   def test_dlfcn_info(self):
@@ -3000,7 +2991,7 @@ def process(filename):
       }
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main', '_malloc'])
-    self.do_run(src, 'success', force_c=True, js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'success', force_c=True)
 
   @needs_dlfcn
   def test_dlfcn_stacks(self):
@@ -3058,7 +3049,7 @@ def process(filename):
       }
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main', '_malloc', '_strcmp'])
-    self.do_run(src, 'success', force_c=True, js_transform=self.dlfcn_post_build)
+    self.do_run(src, 'success', force_c=True)
 
   @needs_dlfcn
   def test_dlfcn_funcs(self):
@@ -3148,6 +3139,7 @@ def process(filename):
       }
       '''
     self.set_setting('EXPORTED_FUNCTIONS', ['_main', '_malloc'])
+    self.add_dlfcn_prejs()
     self.do_run(src, '''go
 main.
 main 201
@@ -3156,7 +3148,7 @@ void 1
 int 0 54
 int 1 9000
 ok
-''', force_c=True, js_transform=self.dlfcn_post_build)
+''', force_c=True)
 
   @needs_dlfcn
   def test_dlfcn_mallocs(self):
@@ -3181,7 +3173,7 @@ ok
     self.prep_dlfcn_main()
     src = open(path_from_root('tests', 'dlmalloc_proxy.c')).read()
     self.set_setting('EXPORTED_FUNCTIONS', ['_main', '_malloc', '_free'])
-    self.do_run(src, '''*294,153*''', force_c=True, js_transform=self.dlfcn_post_build)
+    self.do_run(src, '''*294,153*''', force_c=True)
 
   @needs_dlfcn
   def test_dlfcn_longjmp(self):
@@ -3244,7 +3236,7 @@ pre 7
 pre 8
 pre 9
 out!
-''', js_transform=self.dlfcn_post_build, force_c=True)
+''', force_c=True)
 
   @needs_dlfcn
   def zzztest_dlfcn_exceptions(self): # TODO: make this work. need to forward tempRet0 across modules
@@ -3311,7 +3303,7 @@ out!
 ok: 65
 int 123
 ok
-''', js_transform=self.dlfcn_post_build)
+''')
 
   def dylink_test(self, main, side, expected, header=None, main_emcc_args=[], force_c=False, need_reverse=True, auto_load=True):
     if header:
@@ -4641,18 +4633,16 @@ name: .
     src = open(path_from_root('tests', 'stat', 'test_mknod.c'), 'r').read()
     self.do_run(src, 'success', force_c=True)
 
+  def add_pre_run(self, code):
+    with open('pre.js', 'w') as f:
+      f.write('Module.preRun = function() { %s }' % code)
+    self.emcc_args = ['--pre-js', 'pre.js']
+
   def test_fcntl(self):
-    add_pre_run = '''
-def process(filename):
-  src = open(filename, 'r').read().replace(
-    '// {{PRE_RUN_ADDITIONS}}',
-    "FS.createDataFile('/', 'test', 'abcdef', true, true, false);"
-  )
-  open(filename, 'w').write(src)
-'''
+    self.add_pre_run("FS.createDataFile('/', 'test', 'abcdef', true, true, false);")
     src = open(path_from_root('tests', 'fcntl', 'src.c'), 'r').read()
     expected = open(path_from_root('tests', 'fcntl', 'output.txt'), 'r').read()
-    self.do_run(src, expected, js_transform=add_pre_run)
+    self.do_run(src, expected)
 
   def test_fcntl_open(self):
     src = open(path_from_root('tests', 'fcntl-open', 'src.c'), 'r').read()
@@ -4660,37 +4650,22 @@ def process(filename):
     self.do_run(src, expected, force_c=True)
 
   def test_fcntl_misc(self):
-    add_pre_run = '''
-def process(filename):
-  src = open(filename, 'r').read().replace(
-    '// {{PRE_RUN_ADDITIONS}}',
-    "FS.createDataFile('/', 'test', 'abcdef', true, true, false);"
-  )
-  open(filename, 'w').write(src)
-'''
+    self.add_pre_run("FS.createDataFile('/', 'test', 'abcdef', true, true, false);")
     src = open(path_from_root('tests', 'fcntl-misc', 'src.c'), 'r').read()
     expected = open(path_from_root('tests', 'fcntl-misc', 'output.txt'), 'r').read()
-    self.do_run(src, expected, js_transform=add_pre_run)
+    self.do_run(src, expected)
 
   def test_poll(self):
-    add_pre_run = '''
-def process(filename):
-  src = open(filename, 'r').read().replace(
-    '// {{PRE_RUN_ADDITIONS}}',
-    \'\'\'
+    self.add_pre_run('''
       var dummy_device = FS.makedev(64, 0);
       FS.registerDevice(dummy_device, {});
 
       FS.createDataFile('/', 'file', 'abcdef', true, true, false);
       FS.mkdev('/device', dummy_device);
-    \'\'\'
-  )
-  open(filename, 'w').write(src)
-'''
+    ''')
     test_path = path_from_root('tests', 'core', 'test_poll')
     src, output = (test_path + s for s in ('.c', '.out'))
-
-    self.do_run_from_file(src, output, js_transform=add_pre_run)
+    self.do_run_from_file(src, output)
 
   def test_statvfs(self):
     self.do_run_in_out_file_test('tests', 'core', 'test_statvfs')
@@ -4761,21 +4736,10 @@ def process(filename):
   @no_wasm('wasm libc overlaps js lib, so no INCLUDE_FULL_LIBRARY')
   def test_fs_base(self):
     self.set_setting('INCLUDE_FULL_LIBRARY', 1)
-    Settings.INCLUDE_FULL_LIBRARY = 1
-    try:
-      addJS = '''
-def process(filename):
-  import tools.shared as shared
-  src = open(filename, 'r').read().replace('FS.init();', '').replace( # Disable normal initialization, replace with ours
-    '// {{PRE_RUN_ADDITIONS}}',
-    open(shared.path_from_root('tests', 'filesystem', 'src.js'), 'r').read())
-  open(filename, 'w').write(src)
-'''
-      src = 'int main() {return 0;}\n'
-      expected = open(path_from_root('tests', 'filesystem', 'output.txt'), 'r').read()
-      self.do_run(src, expected, js_transform=addJS)
-    finally:
-      self.set_setting('INCLUDE_FULL_LIBRARY', 0)
+    self.add_pre_run(open(path_from_root('tests', 'filesystem', 'src.js'), 'r').read())
+    src = 'int main() {return 0;}\n'
+    expected = open(path_from_root('tests', 'filesystem', 'output.txt'), 'r').read()
+    self.do_run(src, expected)
 
   @also_with_noderawfs
   def test_fs_nodefs_rw(self, js_engines=[NODE_JS]):
@@ -5354,7 +5318,7 @@ return malloc(size);
 
   def test_dlmalloc_partial_2(self):
     if 'SAFE_HEAP' in str(self.emcc_args): self.skipTest('we do unsafe stuff here')
-    # present part of the symbols of dlmalloc, not all. malloc is harder to link than new which is weak.
+# present part of the symbols of dlmalloc, not all. malloc is harder to link than new which is weak.
 
     self.do_run_in_out_file_test('tests', 'core', 'test_dlmalloc_partial_2')
 
@@ -5758,18 +5722,9 @@ return malloc(size);
       # flip for some more coverage here
       self.set_setting('ALIASING_FUNCTION_POINTERS', 1 - self.get_setting('ALIASING_FUNCTION_POINTERS'))
 
-    post = '''
-def process(filename):
-  import tools.shared as shared
-  # Embed the font into the document
-  src = open(filename, 'r').read().replace(
-    '// {{PRE_RUN_ADDITIONS}}',
-    "FS.createDataFile('/', 'font.ttf', %s, true, false, false);" % str(
-      list(bytearray(open(shared.path_from_root('tests', 'freetype', 'LiberationSansBold.ttf'), 'rb').read()))
-    )
-  )
-  open(filename, 'w').write(src)
-'''
+    self.add_pre_run("FS.createDataFile('/', 'font.ttf', %s, true, false, false);" % str(
+      list(bytearray(open(path_from_root('tests', 'freetype', 'LiberationSansBold.ttf'), 'rb').read()))
+    ))
 
     # Not needed for js, but useful for debugging
     shutil.copyfile(path_from_root('tests', 'freetype', 'LiberationSansBold.ttf'), os.path.join(self.get_dir(), 'font.ttf'))
@@ -5782,8 +5737,7 @@ def process(filename):
                    open(path_from_root('tests', 'freetype', 'ref.txt'), 'r').read(),
                    ['font.ttf', 'test!', '150', '120', '25'],
                    libraries=self.get_freetype(),
-                   includes=[path_from_root('tests', 'freetype', 'include')],
-                   js_transform=post)
+                   includes=[path_from_root('tests', 'freetype', 'include')])
       self.set_setting('OUTLINING_LIMIT', 0)
 
     # github issue 324
@@ -5792,16 +5746,14 @@ def process(filename):
                  open(path_from_root('tests', 'freetype', 'ref_2.txt'), 'r').read(),
                  ['font.ttf', 'w', '32', '32', '25'],
                  libraries=self.get_freetype(),
-                 includes=[path_from_root('tests', 'freetype', 'include')],
-                 js_transform=post)
+                 includes=[path_from_root('tests', 'freetype', 'include')])
 
     print('[issue 324 case 2]')
     self.do_run(open(path_from_root('tests', 'freetype', 'main_3.c'), 'r').read(),
                  open(path_from_root('tests', 'freetype', 'ref_3.txt'), 'r').read(),
                  ['font.ttf', 'W', '32', '32', '0'],
                  libraries=self.get_freetype(),
-                 includes=[path_from_root('tests', 'freetype', 'include')],
-                 js_transform=post)
+                 includes=[path_from_root('tests', 'freetype', 'include')])
 
     print('[issue 324 case 3]')
     self.do_run('',
@@ -5894,7 +5846,6 @@ def process(filename):
         assert len(old) > len(new)
         assert old.count('tempBigInt') > new.count('tempBigInt')
 
-  @sync
   @no_windows('depends on freetype, which uses a ./configure which donsnt run on windows.')
   def test_poppler(self):
     def test():
@@ -5904,28 +5855,25 @@ def process(filename):
       ]
 
       # We append code that does run() ourselves
-      self.set_setting('INVOKE_RUN', 0)
+      #self.set_setting('INVOKE_RUN', 0)
 
-      # See post(), below
-      input_file = open(os.path.join(self.get_dir(), 'paper.pdf.js'), 'w')
-      input_file.write(str(list(bytearray(open(path_from_root('tests', 'poppler', 'paper.pdf'), 'rb').read()))))
-      input_file.close()
+      with open(os.path.join(self.get_dir(), 'paper.pdf.js'), 'w') as f:
+        f.write(str(list(bytearray(open(path_from_root('tests', 'poppler', 'paper.pdf'), 'rb').read()))))
 
-      post = '''
-def process(filename):
-  # To avoid loading this large file to memory and altering it, we simply append to the end
-  src = open(filename, 'a')
-  src.write(
-    \'\'\'
-      FS.createDataFile('/', 'paper.pdf', eval(Module.read('paper.pdf.js')), true, false, false);
-      Module.callMain(Module.arguments);
-      out("Data: " + JSON.stringify(MEMFS.getFileDataAsRegularArray(FS.root.contents['filename-1.ppm']).map(function(x) { return unSign(x, 8) })));
-    \'\'\'
-  )
-  src.close()
-'''
+      with open('pre.js', 'w') as f:
+        f.write('''
+      Module.preRun = function() {
+        FS.createDataFile('/', 'paper.pdf', eval(Module.read('paper.pdf.js')), true, false, false);
+      };
+      Module.postRun = function() {
+        var FileData = MEMFS.getFileDataAsRegularArray(FS.root.contents['filename-1.ppm']);
+        out("Data: " + JSON.stringify(FileData.map(function(x) { return unSign(x, 8) })));
+      };
+''')
+      self.emcc_args += ['--pre-js', 'pre.js']
 
-      # fontconfig = self.get_library('fontconfig', [os.path.join('src', '.libs', 'libfontconfig.a')]) # Used in file, but not needed, mostly
+      # Used in file, but not needed, mostly
+      # fontconfig = self.get_library('fontconfig', [os.path.join('src', '.libs', 'libfontconfig.a')])
       freetype = self.get_freetype()
 
 
@@ -5952,8 +5900,7 @@ def process(filename):
 
       self.do_ll_run(combined,
                      str(list(bytearray(open(path_from_root('tests', 'poppler', 'ref.ppm'), 'rb').read()))).replace(' ', ''),
-                     args='-scale-to 512 paper.pdf filename'.split(' '),
-                     js_transform=post)
+                     args='-scale-to 512 paper.pdf filename'.split(' '))
                      #, build_ll_hook=self.do_autodebug)
 
     test()
@@ -5979,6 +5926,7 @@ def process(filename):
         out('Data: ' + JSON.stringify(MEMFS.getFileDataAsRegularArray(FS.analyzePath('image.raw').object)));
       };
       """ % tools.shared.line_splitter(str(image_bytes)))
+    self.emcc_args += ['--pre-js', 'pre.js']
 
     shutil.copy(path_from_root('tests', 'openjpeg', 'opj_config.h'), self.get_dir())
 
@@ -6026,7 +5974,6 @@ def process(filename):
       return output
 
     self.emcc_args += ['--minify', '0'] # to compare the versions
-    self.emcc_args += ['--pre-js', 'pre.js']
 
     def do_test():
       self.do_run(open(path_from_root('tests', 'openjpeg', 'codec', 'j2k_to_image.c'), 'r').read(),
